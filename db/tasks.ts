@@ -48,10 +48,15 @@ export async function listTasks() {
   `).all();
 
   if (result.results.length === 0) {
-    await database.batch(seedTasks.map((task) => database.prepare(`
-      INSERT INTO tasks (title, category, assignee, due_time, status, priority)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(task.title, task.category, task.assignee, task.dueTime, task.status, task.priority)));
+    const previousUse = await database.prepare(`
+      SELECT seq FROM sqlite_sequence WHERE name = 'tasks'
+    `).first();
+    if (!previousUse) {
+      await database.batch(seedTasks.map((task) => database.prepare(`
+        INSERT INTO tasks (title, category, assignee, due_time, status, priority)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(task.title, task.category, task.assignee, task.dueTime, task.status, task.priority)));
+    }
     result = await database.prepare(`
       SELECT id, title, category, assignee, due_time, status, priority
       FROM tasks
@@ -72,11 +77,53 @@ export async function createTask(task: Omit<TaskRecord, 'id' | 'status'>) {
   return mapRow(result);
 }
 
-export async function updateTaskStatus(id: number, status: TaskStatus) {
+export async function updateTask(task: Omit<TaskRecord, 'status'>) {
   const result = await db().prepare(`
-    UPDATE tasks SET status = ? WHERE id = ?
+    UPDATE tasks
+    SET title = ?, category = ?, assignee = ?, due_time = ?, priority = ?
+    WHERE id = ?
     RETURNING id, title, category, assignee, due_time, status, priority
-  `).bind(status, id).first();
+  `).bind(task.title, task.category, task.assignee, task.dueTime, task.priority, task.id).first();
   if (!result) throw new Error('Task not found');
   return mapRow(result);
+}
+
+export async function updateTaskStatus(id: number, status: TaskStatus, completedBy = '') {
+  const database = db();
+  const previous = await database.prepare(`
+    SELECT id, title, category, assignee, due_time, status, priority
+    FROM tasks WHERE id = ?
+  `).bind(id).first();
+  if (!previous) throw new Error('Task not found');
+
+  if (status === 'done' && previous.status !== 'done') {
+    if (!completedBy) throw new Error('Completed by is required');
+    await database.batch([
+      database.prepare(`UPDATE tasks SET status = ? WHERE id = ?`).bind(status, id),
+      database.prepare(`
+        INSERT INTO completion_history (task_id, task_title, completed_by)
+        VALUES (?, ?, ?)
+      `).bind(id, String(previous.title), completedBy),
+    ]);
+  } else {
+    await database.prepare(`UPDATE tasks SET status = ? WHERE id = ?`).bind(status, id).run();
+  }
+
+  const result = await database.prepare(`
+    SELECT id, title, category, assignee, due_time, status, priority
+    FROM tasks WHERE id = ?
+  `).bind(id).first();
+  if (!result) throw new Error('Task not found');
+  return mapRow(result);
+}
+
+export async function deleteTask(id: number) {
+  const database = db();
+  const existing = await database.prepare(`
+    SELECT id, title, category, assignee, due_time, status, priority
+    FROM tasks WHERE id = ?
+  `).bind(id).first();
+  if (!existing) throw new Error('Task not found');
+  await database.prepare(`DELETE FROM tasks WHERE id = ?`).bind(id).run();
+  return mapRow(existing);
 }
