@@ -1,4 +1,4 @@
-import { addStaff, listStaff } from '@/db/staff';
+import { addStaff, deleteStaff, listStaff } from '@/db/staff';
 
 export async function GET() {
   try {
@@ -21,5 +21,19 @@ export async function POST(request: Request) {
     console.error(error);
     const message = error instanceof Error && /UNIQUE/.test(error.message) ? '同じ名前のスタッフがいます' : 'スタッフを追加できませんでした';
     return Response.json({ error: message }, { status: 409 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const input = await request.json() as Record<string, unknown>;
+    const id = Number(input.id);
+    if (!Number.isInteger(id) || id < 1) {
+      return Response.json({ error: '削除するスタッフを確認してください' }, { status: 400 });
+    }
+    return Response.json(await deleteStaff(id));
+  } catch (error) {
+    console.error(error);
+    return Response.json({ error: 'スタッフを削除できませんでした' }, { status: 500 });
   }
 }

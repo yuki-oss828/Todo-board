@@ -19,9 +19,14 @@ export async function listStaff() {
     SELECT id, name FROM staff_members ORDER BY id ASC
   `).all();
   if (result.results.length === 0) {
-    await database.batch(initialNames.map((name) => database.prepare(`
-      INSERT OR IGNORE INTO staff_members (name) VALUES (?)
-    `).bind(name)));
+    const previousUse = await database.prepare(`
+      SELECT seq FROM sqlite_sequence WHERE name = 'staff_members'
+    `).first();
+    if (!previousUse) {
+      await database.batch(initialNames.map((name) => database.prepare(`
+        INSERT OR IGNORE INTO staff_members (name) VALUES (?)
+      `).bind(name)));
+    }
     result = await database.prepare(`
       SELECT id, name FROM staff_members ORDER BY id ASC
     `).all();
@@ -36,4 +41,25 @@ export async function addStaff(name: string) {
   `).bind(name).first();
   if (!result) throw new Error('Staff member could not be created');
   return mapRow(result);
+}
+
+export async function deleteStaff(id: number) {
+  const database = db();
+  const existing = await database.prepare(`
+    SELECT id, name FROM staff_members WHERE id = ?
+  `).bind(id).first();
+  if (!existing) throw new Error('Staff member not found');
+  const member = mapRow(existing);
+  const assigned = await database.prepare(`
+    SELECT COUNT(*) AS count FROM tasks
+    WHERE assignee = ? AND status != 'done'
+  `).bind(member.name).first<{ count: number }>();
+  await database.batch([
+    database.prepare(`
+      UPDATE tasks SET assignee = ''
+      WHERE assignee = ? AND status != 'done'
+    `).bind(member.name),
+    database.prepare(`DELETE FROM staff_members WHERE id = ?`).bind(id),
+  ]);
+  return { staffMember: member, unassignedTaskCount: Number(assigned?.count ?? 0) };
 }

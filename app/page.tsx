@@ -198,6 +198,7 @@ export default function Home() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [staffDeleteTarget, setStaffDeleteTarget] = useState<StaffMember | null>(null);
   const [completeTask, setCompleteTask] = useState<Task | null>(null);
   const [completedBy, setCompletedBy] = useState('');
   const [notice, setNotice] = useState('');
@@ -428,6 +429,28 @@ export default function Home() {
     }
   }
 
+  async function removeStaffMember() {
+    if (!staffDeleteTarget) return;
+    const target = staffDeleteTarget;
+    setSaving(true);
+    try {
+      const response = await fetch('/api/staff', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: target.id }) });
+      if (!response.ok) throw new Error(await errorMessage(response, 'スタッフを削除できませんでした'));
+      const data = await response.json() as { staffMember: StaffMember; unassignedTaskCount: number };
+      setStaff((current) => current.filter((member) => member.id !== target.id));
+      setTasks((current) => current.map((task) => task.assignee === target.name && task.status !== 'done' ? { ...task, assignee: '' } : task));
+      setDraft((current) => current.assignee === target.name ? { ...current, assignee: '' } : current);
+      setEditDraft((current) => current.assignee === target.name ? { ...current, assignee: '' } : current);
+      setCompletedBy((current) => current === target.name ? '' : current);
+      setStaffDeleteTarget(null);
+      setNotice(data.unassignedTaskCount > 0 ? `スタッフ「${target.name}」を削除し、担当中の${data.unassignedTaskCount}件を担当未定にしました` : `スタッフ「${target.name}」を削除しました`);
+    } catch (error) {
+      setNotice(`エラー：${error instanceof Error ? error.message : 'スタッフを削除できませんでした'}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openHistory() {
     setHistoryOpen(true);
     void loadHistory().catch(() => setNotice('エラー：完了履歴を読み込めませんでした'));
@@ -505,7 +528,7 @@ export default function Home() {
 
           <section className="rounded-2xl border bg-card p-5">
             <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">本日のスタッフ</h2><Button variant="ghost" size="sm" className="text-[#1269e8]" onClick={() => setStaffOpen(true)}><UserPlus />追加</Button></div>
-            <div className="grid gap-3">{staff.map((person, index) => { const count = tasks.filter((task) => task.assignee === person.name && task.status !== 'done').length; return <div key={person.id} className="flex items-center gap-3"><PersonAvatar member={person} index={index} /><span className="flex-1 text-sm font-bold">{person.name}</span><span className="text-sm text-muted-foreground">残り{count}件</span></div>; })}</div>
+            <div className="grid gap-3">{staff.map((person, index) => { const count = tasks.filter((task) => task.assignee === person.name && task.status !== 'done').length; return <div key={person.id} className="flex items-center gap-3"><PersonAvatar member={person} index={index} /><span className="min-w-0 flex-1 truncate text-sm font-bold">{person.name}</span><span className="text-sm text-muted-foreground">残り{count}件</span><Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={() => setStaffDeleteTarget(person)} aria-label={`${person.name}を削除`}><Trash2 /></Button></div>; })}</div>
           </section>
 
           <section className="rounded-2xl border bg-card p-5">
@@ -550,6 +573,13 @@ export default function Home() {
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogMedia className="bg-red-50 text-red-600"><Trash2 /></AlertDialogMedia><AlertDialogTitle>この作業を削除しますか？</AlertDialogTitle><AlertDialogDescription>「{deleteTarget?.title}」を一覧から削除します。過去の完了履歴は残ります。</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel disabled={saving}>キャンセル</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={removeTask} disabled={saving}>{saving ? '削除中…' : '削除する'}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(staffDeleteTarget)} onOpenChange={(open) => { if (!open) setStaffDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogMedia className="bg-red-50 text-red-600"><Trash2 /></AlertDialogMedia><AlertDialogTitle>このスタッフを削除しますか？</AlertDialogTitle><AlertDialogDescription>「{staffDeleteTarget?.name}」をスタッフ一覧から削除します。担当中の作業は「担当未定」に戻り、過去の完了履歴には名前が残ります。</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={saving}>キャンセル</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={removeStaffMember} disabled={saving}>{saving ? '削除中…' : '削除する'}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
