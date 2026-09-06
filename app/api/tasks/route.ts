@@ -2,10 +2,19 @@ import { createTask, deleteTask, listTasks, updateTask, updateTaskStatus, type T
 
 const statuses = new Set<TaskStatus>(['todo', 'doing', 'done']);
 const priorities = new Set<TaskPriority>(['normal', 'high']);
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
-export async function GET() {
+function todayInTokyo() {
+  return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' }).format(new Date());
+}
+
+export async function GET(request: Request) {
   try {
-    return Response.json({ tasks: await listTasks() });
+    const requestedDate = new URL(request.url).searchParams.get('date') ?? todayInTokyo();
+    if (!datePattern.test(requestedDate)) {
+      return Response.json({ error: '日付を確認してください' }, { status: 400 });
+    }
+    return Response.json({ tasks: await listTasks(requestedDate), workDate: requestedDate });
   } catch (error) {
     console.error(error);
     return Response.json({ error: '作業一覧を読み込めませんでした' }, { status: 500 });
@@ -20,10 +29,11 @@ export async function POST(request: Request) {
     const assignee = typeof input.assignee === 'string' ? input.assignee.trim() : '';
     const dueTime = typeof input.dueTime === 'string' ? input.dueTime : '';
     const priority = input.priority as TaskPriority;
-    if (!title || title.length > 100 || !category || !/^\d{2}:\d{2}$/.test(dueTime) || !priorities.has(priority)) {
+    const workDate = typeof input.workDate === 'string' ? input.workDate : '';
+    if (!title || title.length > 100 || !category || !/^\d{2}:\d{2}$/.test(dueTime) || !priorities.has(priority) || !datePattern.test(workDate)) {
       return Response.json({ error: '入力内容を確認してください' }, { status: 400 });
     }
-    return Response.json({ task: await createTask({ title, category, assignee, dueTime, priority }) }, { status: 201 });
+    return Response.json({ task: await createTask({ title, category, assignee, dueTime, priority, workDate }) }, { status: 201 });
   } catch (error) {
     console.error(error);
     return Response.json({ error: '作業を追加できませんでした' }, { status: 500 });

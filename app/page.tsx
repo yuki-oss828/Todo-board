@@ -73,6 +73,7 @@ type Task = {
   dueTime: string;
   status: Status;
   priority: Priority;
+  workDate: string;
 };
 type StaffMember = { id: number; name: string };
 type CompletionRecord = {
@@ -82,7 +83,17 @@ type CompletionRecord = {
   completedBy: string;
   completedAt: string;
 };
-type TaskDraft = Omit<Task, 'id' | 'status'>;
+type TaskDraft = Omit<Task, 'id' | 'status' | 'workDate'>;
+
+function todayKey() {
+  return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' }).format(new Date());
+}
+
+function formatWorkDate(value: string) {
+  return new Intl.DateTimeFormat('ja-JP', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Tokyo' }).format(new Date(`${value}T12:00:00+09:00`));
+}
+
+const initialWorkDate = todayKey();
 
 const initialStaff: StaffMember[] = [
   { id: 1, name: '田中' },
@@ -92,12 +103,12 @@ const initialStaff: StaffMember[] = [
 ];
 
 const initialTasks: Task[] = [
-  { id: 1, title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high' },
-  { id: 2, title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal' },
-  { id: 3, title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal' },
-  { id: 4, title: 'サラダを12皿盛り付け', category: '盛り付け', assignee: '', dueTime: '11:30', status: 'todo', priority: 'high' },
-  { id: 5, title: '米を4升炊く', category: '炊飯', assignee: '高橋', dueTime: '10:00', status: 'done', priority: 'normal' },
-  { id: 6, title: '冷蔵庫の温度を記録', category: '確認', assignee: '田中', dueTime: '09:30', status: 'done', priority: 'normal' },
+  { id: 1, title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high', workDate: initialWorkDate },
+  { id: 2, title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal', workDate: initialWorkDate },
+  { id: 3, title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal', workDate: initialWorkDate },
+  { id: 4, title: 'サラダを12皿盛り付け', category: '盛り付け', assignee: '', dueTime: '11:30', status: 'todo', priority: 'high', workDate: initialWorkDate },
+  { id: 5, title: '米を4升炊く', category: '炊飯', assignee: '高橋', dueTime: '10:00', status: 'done', priority: 'normal', workDate: initialWorkDate },
+  { id: 6, title: '冷蔵庫の温度を記録', category: '確認', assignee: '田中', dueTime: '09:30', status: 'done', priority: 'normal', workDate: initialWorkDate },
 ];
 
 const filters = [
@@ -190,6 +201,7 @@ function TaskFields({ prefix, draft, setDraft, staff }: { prefix: string; draft:
 
 export default function Home() {
   const [tasks, setTasks] = useState(initialTasks);
+  const [workDate, setWorkDate] = useState(initialWorkDate);
   const [staff, setStaff] = useState(initialStaff);
   const [history, setHistory] = useState<CompletionRecord[]>([]);
   const [filter, setFilter] = useState<(typeof filters)[number]['id']>('all');
@@ -207,7 +219,7 @@ export default function Home() {
   const [editDraft, setEditDraft] = useState<TaskDraft>(emptyDraft());
   const [newStaffName, setNewStaffName] = useState('');
 
-  const today = new Intl.DateTimeFormat('ja-JP', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Tokyo' }).format(new Date());
+  const today = formatWorkDate(workDate);
   const completed = tasks.filter((task) => task.status === 'done').length;
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const unassignedCount = tasks.filter((task) => !task.assignee && task.status !== 'done').length;
@@ -227,21 +239,45 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    const loadInitialData = async () => {
-      const [taskResponse, staffResponse] = await Promise.all([fetch('/api/tasks'), fetch('/api/staff')]);
-      if (!taskResponse.ok || !staffResponse.ok) throw new Error('load failed');
-      const taskData = await taskResponse.json() as { tasks: Task[] };
+    const loadPeople = async () => {
+      const staffResponse = await fetch('/api/staff');
+      if (!staffResponse.ok) throw new Error('staff failed');
       const staffData = await staffResponse.json() as { staff: StaffMember[] };
-      const historyResponse = await fetch('/api/history');
-      if (!historyResponse.ok) throw new Error('history failed');
-      const historyData = await historyResponse.json() as { history: CompletionRecord[] };
       if (!active) return;
-      setTasks(taskData.tasks);
       setStaff(staffData.staff);
-      setHistory(historyData.history);
     };
-    void loadInitialData().catch(() => { if (active) setNotice('エラー：保存済みのデータを読み込めませんでした'); });
+    void loadPeople().catch(() => { if (active) setNotice('エラー：スタッフ一覧を読み込めませんでした'); });
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/tasks?date=${workDate}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error('tasks failed');
+        return response.json() as Promise<{ tasks: Task[] }>;
+      })
+      .then(async (data) => {
+        if (active) setTasks(data.tasks);
+        try {
+          await loadHistory();
+        } catch {
+          if (active) setNotice('エラー：完了履歴を読み込めませんでした');
+        }
+      })
+      .catch(() => { if (active) setNotice('エラー：今日の作業を読み込めませんでした'); });
+    return () => { active = false; };
+  }, [loadHistory, workDate]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const nextDate = todayKey();
+      setWorkDate((current) => {
+        if (current === nextDate) return current;
+        return nextDate;
+      });
+    }, 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -271,7 +307,7 @@ export default function Home() {
       execute: async (raw: unknown) => {
         const input = raw as Partial<TaskDraft>;
         if (!input.title?.trim() || !input.category?.trim() || !/^\d{2}:\d{2}$/.test(input.dueTime ?? '') || !['normal', 'high'].includes(input.priority ?? '')) throw new Error('入力内容が正しくありません');
-        const response = await fetch('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+        const response = await fetch('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...input, workDate }) });
         if (!response.ok) throw new Error('作業を追加できませんでした');
         const { task } = await response.json() as { task: Task };
         setTasks((current) => [...current, task]);
@@ -324,7 +360,7 @@ export default function Home() {
     });
 
     return () => lifecycle.abort();
-  }, [loadHistory]);
+  }, [loadHistory, workDate]);
 
   async function setTaskStatus(task: Task, status: Status, person = '') {
     setSaving(true);
@@ -357,7 +393,7 @@ export default function Home() {
     if (!title) return;
     setSaving(true);
     try {
-      const response = await fetch('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...draft, title }) });
+      const response = await fetch('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...draft, title, workDate }) });
       if (!response.ok) throw new Error(await errorMessage(response, '作業を追加できませんでした'));
       const { task } = await response.json() as { task: Task };
       setTasks((current) => [...current, task]);
@@ -484,7 +520,7 @@ export default function Home() {
       <div className="mx-auto grid max-w-[1440px] gap-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_310px] lg:px-12 lg:py-9">
         <section className="min-w-0">
           <div className="mb-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-            <div><p className="mb-1 flex items-center gap-2 text-sm font-bold text-[#1269e8]"><Sparkles className="size-4" aria-hidden="true" /> TODAY&apos;S PREP</p><h1 className="text-3xl font-black tracking-[-0.045em] sm:text-4xl">今日の仕込み</h1><p className="mt-2 text-base text-muted-foreground">{today} ・ ランチ営業まであと3時間</p></div>
+            <div><p className="mb-1 flex items-center gap-2 text-sm font-bold text-[#1269e8]"><Sparkles className="size-4" aria-hidden="true" /> TODAY&apos;S PREP</p><h1 className="text-3xl font-black tracking-[-0.045em] sm:text-4xl">今日の仕込み</h1><p className="mt-2 text-base text-muted-foreground">{today} ・ 前日の未完了は自動で繰り越します</p></div>
             <div className="flex flex-wrap gap-2" aria-label="作業の絞り込み">
               {filters.map((item) => <Button key={item.id} size="lg" variant={filter === item.id ? 'default' : 'outline'} onClick={() => setFilter(item.id)} className={filter === item.id ? 'rounded-xl bg-[#1269e8]' : 'rounded-xl'}>{item.label}{item.id === 'unassigned' && unassignedCount > 0 ? <span className="ml-1 grid size-5 place-items-center rounded-full bg-[#ed6a45] text-[11px] text-white">{unassignedCount}</span> : null}</Button>)}
             </div>

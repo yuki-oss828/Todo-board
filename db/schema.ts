@@ -9,7 +9,13 @@ export const tasks = sqliteTable('tasks', {
   dueTime: text('due_time').notNull(),
   status: text('status', { enum: ['todo', 'doing', 'done'] }).notNull().default('todo'),
   priority: text('priority', { enum: ['normal', 'high'] }).notNull().default('normal'),
+  workDate: text('work_date').notNull().default('1970-01-01'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index('idx_tasks_work_date_status').on(table.workDate, table.status)]);
+
+export const boardDays = sqliteTable('board_days', {
+  workDate: text('work_date').primaryKey(),
+  initializedAt: text('initialized_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const staffMembers = sqliteTable('staff_members', {

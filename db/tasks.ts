@@ -11,9 +11,10 @@ export type TaskRecord = {
   dueTime: string;
   status: TaskStatus;
   priority: TaskPriority;
+  workDate: string;
 };
 
-const seedTasks: Omit<TaskRecord, 'id'>[] = [
+const seedTasks: Omit<TaskRecord, 'id' | 'workDate'>[] = [
   { title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high' },
   { title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal' },
   { title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal' },
@@ -36,53 +37,88 @@ function mapRow(row: Record<string, unknown>): TaskRecord {
     dueTime: String(row.due_time),
     status: String(row.status) as TaskStatus,
     priority: String(row.priority) as TaskPriority,
+    workDate: String(row.work_date),
   };
 }
 
-export async function listTasks() {
-  const database = db();
-  let result = await database.prepare(`
-    SELECT id, title, category, assignee, due_time, status, priority
+async function readTasks(workDate: string) {
+  const result = await db().prepare(`
+    SELECT id, title, category, assignee, due_time, status, priority, work_date
     FROM tasks
+    WHERE work_date = ?
     ORDER BY CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END, due_time ASC, id ASC
-  `).all();
-
-  if (result.results.length === 0) {
-    const previousUse = await database.prepare(`
-      SELECT seq FROM sqlite_sequence WHERE name = 'tasks'
-    `).first();
-    if (!previousUse) {
-      await database.batch(seedTasks.map((task) => database.prepare(`
-        INSERT INTO tasks (title, category, assignee, due_time, status, priority)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).bind(task.title, task.category, task.assignee, task.dueTime, task.status, task.priority)));
-    }
-    result = await database.prepare(`
-      SELECT id, title, category, assignee, due_time, status, priority
-      FROM tasks
-      ORDER BY CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END, due_time ASC, id ASC
-    `).all();
-  }
-
+  `).bind(workDate).all();
   return result.results.map(mapRow);
 }
 
+export async function listTasks(workDate: string) {
+  const database = db();
+
+  await database.prepare(`
+    UPDATE tasks SET work_date = ? WHERE work_date = '1970-01-01'
+  `).bind(workDate).run();
+
+  const initialized = await database.prepare(`
+    SELECT work_date FROM board_days WHERE work_date = ?
+  `).bind(workDate).first();
+
+  if (!initialized) {
+    const currentTasks = await readTasks(workDate);
+    if (currentTasks.length === 0) {
+      const previousDate = await database.prepare(`
+        SELECT MAX(work_date) AS work_date
+        FROM tasks
+        WHERE work_date < ?
+      `).bind(workDate).first<{ work_date: string | null }>();
+
+      if (previousDate?.work_date) {
+        await database.batch([
+          database.prepare(`
+            INSERT INTO tasks (title, category, assignee, due_time, status, priority, work_date)
+            SELECT title, category, assignee, due_time, 'todo', priority, ?
+            FROM tasks
+            WHERE work_date = ? AND status != 'done'
+          `).bind(workDate, previousDate.work_date),
+          database.prepare(`INSERT INTO board_days (work_date) VALUES (?)`).bind(workDate),
+        ]);
+      } else {
+        const previousUse = await database.prepare(`
+          SELECT seq FROM sqlite_sequence WHERE name = 'tasks'
+        `).first();
+        if (!previousUse) {
+          await database.batch(seedTasks.map((task) => database.prepare(`
+            INSERT INTO tasks (title, category, assignee, due_time, status, priority, work_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(task.title, task.category, task.assignee, task.dueTime, task.status, task.priority, workDate)));
+        }
+        await database.prepare(`INSERT INTO board_days (work_date) VALUES (?)`).bind(workDate).run();
+      }
+    } else {
+      await database.prepare(`INSERT INTO board_days (work_date) VALUES (?)`).bind(workDate).run();
+    }
+  }
+
+  return readTasks(workDate);
+}
+
 export async function createTask(task: Omit<TaskRecord, 'id' | 'status'>) {
-  const result = await db().prepare(`
-    INSERT INTO tasks (title, category, assignee, due_time, status, priority)
-    VALUES (?, ?, ?, ?, 'todo', ?)
-    RETURNING id, title, category, assignee, due_time, status, priority
-  `).bind(task.title, task.category, task.assignee, task.dueTime, task.priority).first();
+  const database = db();
+  await database.prepare(`INSERT OR IGNORE INTO board_days (work_date) VALUES (?)`).bind(task.workDate).run();
+  const result = await database.prepare(`
+    INSERT INTO tasks (title, category, assignee, due_time, status, priority, work_date)
+    VALUES (?, ?, ?, ?, 'todo', ?, ?)
+    RETURNING id, title, category, assignee, due_time, status, priority, work_date
+  `).bind(task.title, task.category, task.assignee, task.dueTime, task.priority, task.workDate).first();
   if (!result) throw new Error('Task could not be created');
   return mapRow(result);
 }
 
-export async function updateTask(task: Omit<TaskRecord, 'status'>) {
+export async function updateTask(task: Omit<TaskRecord, 'status' | 'workDate'>) {
   const result = await db().prepare(`
     UPDATE tasks
     SET title = ?, category = ?, assignee = ?, due_time = ?, priority = ?
     WHERE id = ?
-    RETURNING id, title, category, assignee, due_time, status, priority
+    RETURNING id, title, category, assignee, due_time, status, priority, work_date
   `).bind(task.title, task.category, task.assignee, task.dueTime, task.priority, task.id).first();
   if (!result) throw new Error('Task not found');
   return mapRow(result);
@@ -91,7 +127,7 @@ export async function updateTask(task: Omit<TaskRecord, 'status'>) {
 export async function updateTaskStatus(id: number, status: TaskStatus, completedBy = '') {
   const database = db();
   const previous = await database.prepare(`
-    SELECT id, title, category, assignee, due_time, status, priority
+    SELECT id, title, category, assignee, due_time, status, priority, work_date
     FROM tasks WHERE id = ?
   `).bind(id).first();
   if (!previous) throw new Error('Task not found');
@@ -110,7 +146,7 @@ export async function updateTaskStatus(id: number, status: TaskStatus, completed
   }
 
   const result = await database.prepare(`
-    SELECT id, title, category, assignee, due_time, status, priority
+    SELECT id, title, category, assignee, due_time, status, priority, work_date
     FROM tasks WHERE id = ?
   `).bind(id).first();
   if (!result) throw new Error('Task not found');
@@ -120,7 +156,7 @@ export async function updateTaskStatus(id: number, status: TaskStatus, completed
 export async function deleteTask(id: number) {
   const database = db();
   const existing = await database.prepare(`
-    SELECT id, title, category, assignee, due_time, status, priority
+    SELECT id, title, category, assignee, due_time, status, priority, work_date
     FROM tasks WHERE id = ?
   `).bind(id).first();
   if (!existing) throw new Error('Task not found');
