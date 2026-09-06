@@ -30,10 +30,11 @@ export async function POST(request: Request) {
     const dueTime = typeof input.dueTime === 'string' ? input.dueTime : '';
     const priority = input.priority as TaskPriority;
     const workDate = typeof input.workDate === 'string' ? input.workDate : '';
+    const repeatDaily = input.repeatDaily === true;
     if (!title || title.length > 100 || !category || !/^\d{2}:\d{2}$/.test(dueTime) || !priorities.has(priority) || !datePattern.test(workDate)) {
       return Response.json({ error: '入力内容を確認してください' }, { status: 400 });
     }
-    return Response.json({ task: await createTask({ title, category, assignee, dueTime, priority, workDate }) }, { status: 201 });
+    return Response.json({ task: await createTask({ title, category, assignee, dueTime, priority, workDate, repeatDaily }) }, { status: 201 });
   } catch (error) {
     console.error(error);
     return Response.json({ error: '作業を追加できませんでした' }, { status: 500 });
@@ -68,10 +69,11 @@ export async function PUT(request: Request) {
     const assignee = typeof input.assignee === 'string' ? input.assignee.trim() : '';
     const dueTime = typeof input.dueTime === 'string' ? input.dueTime : '';
     const priority = input.priority as TaskPriority;
+    const repeatDaily = input.repeatDaily === true;
     if (!Number.isInteger(id) || id < 1 || !title || title.length > 100 || !category || !/^\d{2}:\d{2}$/.test(dueTime) || !priorities.has(priority)) {
       return Response.json({ error: '入力内容を確認してください' }, { status: 400 });
     }
-    return Response.json({ task: await updateTask({ id, title, category, assignee, dueTime, priority }) });
+    return Response.json({ task: await updateTask({ id, title, category, assignee, dueTime, priority, repeatDaily }) });
   } catch (error) {
     console.error(error);
     return Response.json({ error: '作業を修正できませんでした' }, { status: 500 });

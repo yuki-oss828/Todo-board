@@ -59,6 +59,10 @@ export async function deleteStaff(id: number) {
       UPDATE tasks SET assignee = ''
       WHERE assignee = ? AND status != 'done'
     `).bind(member.name),
+    database.prepare(`
+      UPDATE task_templates SET assignee = ''
+      WHERE assignee = ? AND active = 1
+    `).bind(member.name),
     database.prepare(`DELETE FROM staff_members WHERE id = ?`).bind(id),
   ]);
   return { staffMember: member, unassignedTaskCount: Number(assigned?.count ?? 0) };

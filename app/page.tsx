@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Repeat2,
   Sparkles,
   Trash2,
   UserPlus,
@@ -74,6 +75,8 @@ type Task = {
   status: Status;
   priority: Priority;
   workDate: string;
+  templateId: string | null;
+  repeatDaily: boolean;
 };
 type StaffMember = { id: number; name: string };
 type CompletionRecord = {
@@ -83,7 +86,7 @@ type CompletionRecord = {
   completedBy: string;
   completedAt: string;
 };
-type TaskDraft = Omit<Task, 'id' | 'status' | 'workDate'>;
+type TaskDraft = Omit<Task, 'id' | 'status' | 'workDate' | 'templateId'>;
 
 function todayKey() {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' }).format(new Date());
@@ -103,12 +106,12 @@ const initialStaff: StaffMember[] = [
 ];
 
 const initialTasks: Task[] = [
-  { id: 1, title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high', workDate: initialWorkDate },
-  { id: 2, title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal', workDate: initialWorkDate },
-  { id: 3, title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal', workDate: initialWorkDate },
-  { id: 4, title: 'サラダを12皿盛り付け', category: '盛り付け', assignee: '', dueTime: '11:30', status: 'todo', priority: 'high', workDate: initialWorkDate },
-  { id: 5, title: '米を4升炊く', category: '炊飯', assignee: '高橋', dueTime: '10:00', status: 'done', priority: 'normal', workDate: initialWorkDate },
-  { id: 6, title: '冷蔵庫の温度を記録', category: '確認', assignee: '田中', dueTime: '09:30', status: 'done', priority: 'normal', workDate: initialWorkDate },
+  { id: 1, title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high', workDate: initialWorkDate, templateId: null, repeatDaily: false },
+  { id: 2, title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
+  { id: 3, title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
+  { id: 4, title: 'サラダを12皿盛り付け', category: '盛り付け', assignee: '', dueTime: '11:30', status: 'todo', priority: 'high', workDate: initialWorkDate, templateId: null, repeatDaily: false },
+  { id: 5, title: '米を4升炊く', category: '炊飯', assignee: '高橋', dueTime: '10:00', status: 'done', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
+  { id: 6, title: '冷蔵庫の温度を記録', category: '確認', assignee: '田中', dueTime: '09:30', status: 'done', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
 ];
 
 const filters = [
@@ -129,7 +132,7 @@ const avatarTones = [
 ];
 
 function emptyDraft(): TaskDraft {
-  return { title: '', category: '仕込み', assignee: '', dueTime: '11:30', priority: 'normal' };
+  return { title: '', category: '仕込み', assignee: '', dueTime: '11:30', priority: 'normal', repeatDaily: false };
 }
 
 function staffTone(index: number) {
@@ -194,6 +197,11 @@ function TaskFields({ prefix, draft, setDraft, staff }: { prefix: string; draft:
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border bg-slate-50 p-3 text-sm font-semibold">
         <input type="checkbox" checked={draft.priority === 'high'} onChange={(event) => setDraft({ ...draft, priority: event.target.checked ? 'high' : 'normal' })} className="size-4 accent-[#ed6a45]" />
         <Flame className="size-4 text-[#df5631]" aria-hidden="true" /> 急ぎの作業にする
+      </label>
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#b9d4ff] bg-[#f1f6ff] p-3 text-sm font-semibold text-[#174d91]">
+        <input type="checkbox" checked={draft.repeatDaily} onChange={(event) => setDraft({ ...draft, repeatDaily: event.target.checked })} className="size-4 accent-[#1269e8]" />
+        <Repeat2 className="size-4" aria-hidden="true" />
+        <span>毎日繰り返す<span className="mt-0.5 block text-xs font-medium text-[#5377a4]">完了しても、翌日に未完了で自動登録します</span></span>
       </label>
     </div>
   );
@@ -299,6 +307,7 @@ export default function Home() {
           assignee: { type: 'string' },
           dueTime: { type: 'string', pattern: '^\\d{2}:\\d{2}$' },
           priority: { type: 'string', enum: ['normal', 'high'] },
+          repeatDaily: { type: 'boolean', description: '毎日自動登録する場合はtrue' },
         },
         required: ['title', 'category', 'assignee', 'dueTime', 'priority'],
         additionalProperties: false,
@@ -409,7 +418,7 @@ export default function Home() {
 
   function openEdit(task: Task) {
     setEditTask(task);
-    setEditDraft({ title: task.title, category: task.category, assignee: task.assignee, dueTime: task.dueTime, priority: task.priority });
+    setEditDraft({ title: task.title, category: task.category, assignee: task.assignee, dueTime: task.dueTime, priority: task.priority, repeatDaily: task.repeatDaily });
   }
 
   async function saveEdit() {
@@ -537,7 +546,7 @@ export default function Home() {
                   <Button variant="ghost" size="icon-lg" onClick={() => cycleStatus(task)} disabled={saving} aria-label={`${task.title}の状態を変更`} className={`size-11 rounded-xl border-2 ${task.status === 'done' ? 'border-[#42db9c] bg-[#42db9c] text-[#0a3a29]' : task.status === 'doing' ? 'border-[#1269e8] bg-[#e6f0ff] text-[#1269e8]' : 'border-slate-200 bg-white text-slate-400'}`}>
                     {task.status === 'done' ? <Check className="size-5" /> : task.status === 'doing' ? <span className="size-2.5 rounded-full bg-current shadow-[0_0_0_5px_rgba(18,105,232,.12)]" /> : <span className="size-2 rounded-full bg-slate-300" />}
                   </Button>
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className={`truncate text-base font-bold sm:text-lg ${task.status === 'done' ? 'line-through' : ''}`}>{task.title}</h2>{task.priority === 'high' && task.status !== 'done' ? <span className="inline-flex items-center gap-1 rounded-full bg-[#fff0ea] px-2 py-1 text-xs font-bold text-[#c94724]"><Flame className="size-3" />急ぎ</span> : null}</div><div className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{task.category}</span><span className="font-medium text-[#1269e8]">{statusLabel[task.status]}</span></div></div>
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className={`truncate text-base font-bold sm:text-lg ${task.status === 'done' ? 'line-through' : ''}`}>{task.title}</h2>{task.priority === 'high' && task.status !== 'done' ? <span className="inline-flex items-center gap-1 rounded-full bg-[#fff0ea] px-2 py-1 text-xs font-bold text-[#c94724]"><Flame className="size-3" />急ぎ</span> : null}{task.repeatDaily ? <span className="inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-1 text-xs font-bold text-[#145daf]"><Repeat2 className="size-3" />毎日</span> : null}</div><div className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{task.category}</span><span className="font-medium text-[#1269e8]">{statusLabel[task.status]}</span></div></div>
                   <div className="col-start-2 flex items-center justify-between gap-2 sm:col-start-auto sm:justify-end">
                     {person ? <div className="flex items-center gap-2"><PersonAvatar member={person} index={personIndex} /><span className="text-sm font-bold">{person.name}</span></div> : <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[#ed6a45] bg-[#fff8f5] px-3 py-1.5 text-sm font-bold text-[#bd3f1f]"><Users className="size-4" />担当未定</span>}
                     <span className="flex items-center gap-1 text-sm font-semibold tabular-nums text-muted-foreground"><Clock3 className="size-4" />{task.dueTime}</span>
@@ -607,7 +616,7 @@ export default function Home() {
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogMedia className="bg-red-50 text-red-600"><Trash2 /></AlertDialogMedia><AlertDialogTitle>この作業を削除しますか？</AlertDialogTitle><AlertDialogDescription>「{deleteTarget?.title}」を一覧から削除します。過去の完了履歴は残ります。</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogMedia className="bg-red-50 text-red-600"><Trash2 /></AlertDialogMedia><AlertDialogTitle>この作業を削除しますか？</AlertDialogTitle><AlertDialogDescription>「{deleteTarget?.title}」を一覧から削除します。{deleteTarget?.repeatDaily ? '毎日の自動登録も停止します。' : ''}過去の完了履歴は残ります。</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel disabled={saving}>キャンセル</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={removeTask} disabled={saving}>{saving ? '削除中…' : '削除する'}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
