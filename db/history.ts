@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { getSql } from './client';
 
 export type CompletionRecord = {
   id: number;
@@ -8,37 +8,37 @@ export type CompletionRecord = {
   completedAt: string;
 };
 
-function db() {
-  if (!env.DB) throw new Error('Database is unavailable');
-  return env.DB;
+function asRows(result: unknown) {
+  return result as Record<string, unknown>[];
 }
 
 function mapRow(row: Record<string, unknown>): CompletionRecord {
+  const completedAt = row.completed_at instanceof Date
+    ? row.completed_at.toISOString()
+    : String(row.completed_at);
   return {
     id: Number(row.id),
     taskId: row.task_id === null ? null : Number(row.task_id),
     taskTitle: String(row.task_title),
     completedBy: String(row.completed_by),
-    completedAt: String(row.completed_at),
+    completedAt,
   };
 }
 
 export async function listCompletionHistory() {
-  const database = db();
-  await database.prepare(`
+  const sql = getSql();
+  await sql.query(`
     INSERT INTO completion_history (task_id, task_title, completed_by)
     SELECT tasks.id, tasks.title, CASE WHEN tasks.assignee = '' THEN '未記録' ELSE tasks.assignee END
     FROM tasks
     WHERE tasks.status = 'done'
-      AND NOT EXISTS (
-        SELECT 1 FROM completion_history WHERE completion_history.task_id = tasks.id
-      )
-  `).run();
-  const result = await database.prepare(`
+    ON CONFLICT (task_id) WHERE task_id IS NOT NULL DO NOTHING
+  `);
+  const result = await sql.query(`
     SELECT id, task_id, task_title, completed_by, completed_at
     FROM completion_history
     ORDER BY completed_at DESC, id DESC
     LIMIT 100
-  `).all();
-  return result.results.map(mapRow);
+  `);
+  return asRows(result).map(mapRow);
 }

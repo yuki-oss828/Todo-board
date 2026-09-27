@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -9,6 +9,7 @@ import {
   Flame,
   History,
   LayoutList,
+  LockKeyhole,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -212,6 +213,10 @@ function TaskFields({ prefix, draft, setDraft, staff }: { prefix: string; draft:
 }
 
 export default function Home() {
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
+  const [accessPin, setAccessPin] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
   const [workDate, setWorkDate] = useState(initialWorkDate);
   const [staff, setStaff] = useState(initialStaff);
@@ -261,6 +266,15 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
+    fetch('/api/auth', { cache: 'no-store' })
+      .then((response) => { if (active) setAuthStatus(response.ok ? 'authenticated' : 'unauthenticated'); })
+      .catch(() => { if (active) setAuthStatus('unauthenticated'); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return;
+    let active = true;
     const loadPeople = async () => {
       const staffResponse = await fetch('/api/staff');
       if (!staffResponse.ok) throw new Error('staff failed');
@@ -270,9 +284,10 @@ export default function Home() {
     };
     void loadPeople().catch(() => { if (active) setNotice('エラー：スタッフ一覧を読み込めませんでした'); });
     return () => { active = false; };
-  }, []);
+  }, [authStatus]);
 
   useEffect(() => {
+    if (authStatus !== 'authenticated') return;
     let active = true;
     fetch(`/api/tasks?date=${workDate}`)
       .then(async (response) => {
@@ -289,7 +304,7 @@ export default function Home() {
       })
       .catch(() => { if (active) setNotice('エラー：今日の作業を読み込めませんでした'); });
     return () => { active = false; };
-  }, [loadHistory, workDate]);
+  }, [authStatus, loadHistory, workDate]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -303,6 +318,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (authStatus !== 'authenticated') return;
     type WebMcpContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
     const context = (document as unknown as { modelContext?: WebMcpContext }).modelContext;
     if (!context?.registerTool) return;
@@ -383,7 +399,35 @@ export default function Home() {
     });
 
     return () => lifecycle.abort();
-  }, [loadHistory, workDate]);
+  }, [authStatus, loadHistory, workDate]);
+
+  async function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessPin.trim()) return;
+    setAuthSubmitting(true);
+    setAuthError('');
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pin: accessPin }),
+      });
+      if (!response.ok) throw new Error(await errorMessage(response, 'PINを確認してください'));
+      setAccessPin('');
+      setAuthStatus('authenticated');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'PINを確認してください');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  }
+
+  async function lockBoard() {
+    await fetch('/api/auth', { method: 'DELETE' }).catch(() => undefined);
+    setAuthStatus('unauthenticated');
+    setAccessPin('');
+    setAuthError('');
+  }
 
   async function setTaskStatus(task: Task, status: Status, person = '') {
     setSaving(true);
@@ -515,6 +559,45 @@ export default function Home() {
     void loadHistory().catch(() => setNotice('エラー：完了履歴を読み込めませんでした'));
   }
 
+  if (authStatus === 'checking') {
+    return <main className="grid min-h-screen place-items-center bg-[#101827] text-white"><p className="text-sm font-semibold">確認中...</p></main>;
+  }
+
+  if (authStatus === 'unauthenticated') {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#101827] px-5 py-10 text-white">
+        <section className="w-full max-w-sm rounded-3xl bg-white p-7 text-slate-900 shadow-2xl">
+          <div className="mb-7 flex items-center gap-3">
+            <span className="grid size-12 place-items-center rounded-2xl bg-[#42db9c] text-[#081b16]"><LockKeyhole className="size-6" aria-hidden="true" /></span>
+            <div><h1 className="text-xl font-black">作業確認ボード</h1><p className="text-sm text-muted-foreground">店舗用アクセス</p></div>
+          </div>
+          <form onSubmit={signIn} className="grid gap-4">
+            <label htmlFor="access-pin" className="grid gap-2 text-sm font-bold">
+              アクセスPIN
+              <Input
+                id="access-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus
+                maxLength={4}
+                value={accessPin}
+                onChange={(event) => setAccessPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4桁のPIN"
+                className="h-14 rounded-xl text-center text-xl tracking-[0.3em]"
+              />
+            </label>
+            {authError ? <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{authError}</p> : null}
+            <Button type="submit" className="h-13 rounded-xl bg-[#1269e8] text-base font-bold" disabled={accessPin.length !== 4 || authSubmitting}>
+              {authSubmitting ? '確認中...' : 'ボードを開く'}
+            </Button>
+          </form>
+          <p className="mt-5 text-center text-xs leading-relaxed text-muted-foreground">PINが分からない場合は店長に確認してください。</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="border-b border-white/10 bg-[#101827] text-white">
@@ -528,6 +611,7 @@ export default function Home() {
               {staff.slice(0, 6).map((person, index) => <PersonAvatar key={person.id} member={person} index={index} size="sm" />)}
             </div>
             <Button variant="outline" className="h-10 rounded-xl border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={openHistory}><History /><span className="hidden sm:inline">完了履歴</span></Button>
+            <Button variant="outline" className="h-10 rounded-xl border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={() => void lockBoard()}><LockKeyhole /><span className="hidden sm:inline">ロック</span></Button>
             <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
               <DialogTrigger render={<Button className="h-10 rounded-xl bg-[#42db9c] px-3 text-[#081b16] hover:bg-[#6ee8b5] sm:px-4" />}><Plus aria-hidden="true" /><span className="hidden sm:inline">新しい作業</span><span className="sm:hidden">追加</span></DialogTrigger>
               <DialogContent className="max-w-md rounded-2xl p-6">

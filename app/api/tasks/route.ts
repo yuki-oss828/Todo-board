@@ -1,4 +1,5 @@
 import { createTask, deleteTask, listTasks, updateTask, updateTaskStatus, type TaskPriority, type TaskStatus } from '@/db/tasks';
+import { requireSiteAccess } from '@/lib/site-auth';
 
 const statuses = new Set<TaskStatus>(['todo', 'doing', 'done']);
 const priorities = new Set<TaskPriority>(['normal', 'high']);
@@ -9,6 +10,8 @@ function todayInTokyo() {
 }
 
 export async function GET(request: Request) {
+  const denied = await requireSiteAccess(request);
+  if (denied) return denied;
   try {
     const requestedDate = new URL(request.url).searchParams.get('date') ?? todayInTokyo();
     if (!datePattern.test(requestedDate)) {
@@ -22,6 +25,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireSiteAccess(request);
+  if (denied) return denied;
   try {
     const input = await request.json() as Record<string, unknown>;
     const title = typeof input.title === 'string' ? input.title.trim() : '';
@@ -42,6 +47,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const denied = await requireSiteAccess(request);
+  if (denied) return denied;
   try {
     const input = await request.json() as Record<string, unknown>;
     const id = Number(input.id);
@@ -61,6 +68,8 @@ export async function PATCH(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const denied = await requireSiteAccess(request);
+  if (denied) return denied;
   try {
     const input = await request.json() as Record<string, unknown>;
     const id = Number(input.id);
@@ -81,6 +90,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = await requireSiteAccess(request);
+  if (denied) return denied;
   try {
     const input = await request.json() as Record<string, unknown>;
     const id = Number(input.id);

@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist);
+  --font-sans: "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -49,7 +49,7 @@
 }
 
 body {
-  font-family: var(--font-geist), "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", sans-serif;
 }
 
 :root {
