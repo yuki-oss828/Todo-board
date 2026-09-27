@@ -5,8 +5,8 @@ import './globals.css';
 const geist = Geist({ variable: '--font-geist', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: '仕込みボード',
-  description: 'スタッフみんなで、今日の仕込みと担当を共有する作業管理アプリ',
+  title: '作業確認ボード',
+  description: 'スタッフみんなで、開店前と締めの作業状況を共有する確認アプリ',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

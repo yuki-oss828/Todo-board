@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 export const tasks = sqliteTable('tasks', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
-  category: text('category').notNull().default('仕込み'),
+  category: text('category').notNull().default('開店前'),
   assignee: text('assignee').notNull().default(''),
   dueTime: text('due_time').notNull(),
   status: text('status', { enum: ['todo', 'doing', 'done'] }).notNull().default('todo'),
@@ -25,7 +25,7 @@ export const boardDays = sqliteTable('board_days', {
 export const taskTemplates = sqliteTable('task_templates', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
-  category: text('category').notNull().default('仕込み'),
+  category: text('category').notNull().default('開店前'),
   assignee: text('assignee').notNull().default(''),
   dueTime: text('due_time').notNull(),
   priority: text('priority', { enum: ['normal', 'high'] }).notNull().default('normal'),

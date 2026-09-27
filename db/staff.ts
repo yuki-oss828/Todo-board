@@ -2,8 +2,6 @@ import { env } from 'cloudflare:workers';
 
 export type StaffRecord = { id: number; name: string };
 
-const initialNames = ['田中', '佐藤', '鈴木', '高橋'];
-
 function db() {
   if (!env.DB) throw new Error('Database is unavailable');
   return env.DB;
@@ -14,23 +12,9 @@ function mapRow(row: Record<string, unknown>): StaffRecord {
 }
 
 export async function listStaff() {
-  const database = db();
-  let result = await database.prepare(`
+  const result = await db().prepare(`
     SELECT id, name FROM staff_members ORDER BY id ASC
   `).all();
-  if (result.results.length === 0) {
-    const previousUse = await database.prepare(`
-      SELECT seq FROM sqlite_sequence WHERE name = 'staff_members'
-    `).first();
-    if (!previousUse) {
-      await database.batch(initialNames.map((name) => database.prepare(`
-        INSERT OR IGNORE INTO staff_members (name) VALUES (?)
-      `).bind(name)));
-    }
-    result = await database.prepare(`
-      SELECT id, name FROM staff_members ORDER BY id ASC
-    `).all();
-  }
   return result.results.map(mapRow);
 }
 

@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Check,
   ChefHat,
-  Clock3,
   Flame,
   History,
   LayoutList,
@@ -98,20 +97,19 @@ function formatWorkDate(value: string) {
 
 const initialWorkDate = todayKey();
 
-const initialStaff: StaffMember[] = [
-  { id: 1, name: '田中' },
-  { id: 2, name: '佐藤' },
-  { id: 3, name: '鈴木' },
-  { id: 4, name: '高橋' },
-];
+const initialStaff: StaffMember[] = [];
 
 const initialTasks: Task[] = [
-  { id: 1, title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high', workDate: initialWorkDate, templateId: null, repeatDaily: false },
-  { id: 2, title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
-  { id: 3, title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
-  { id: 4, title: 'サラダを12皿盛り付け', category: '盛り付け', assignee: '', dueTime: '11:30', status: 'todo', priority: 'high', workDate: initialWorkDate, templateId: null, repeatDaily: false },
-  { id: 5, title: '米を4升炊く', category: '炊飯', assignee: '高橋', dueTime: '10:00', status: 'done', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
-  { id: 6, title: '冷蔵庫の温度を記録', category: '確認', assignee: '田中', dueTime: '09:30', status: 'done', priority: 'normal', workDate: initialWorkDate, templateId: null, repeatDaily: false },
+  { id: 1, title: 'カウンターを拭く', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-counter', repeatDaily: true },
+  { id: 2, title: 'ビールの調整をする', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-beer', repeatDaily: true },
+  { id: 3, title: '伝票を確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-slips', repeatDaily: true },
+  { id: 4, title: '部屋をセットする', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-rooms', repeatDaily: true },
+  { id: 5, title: '氷を用意する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-ice', repeatDaily: true },
+  { id: 6, title: 'コース料理を確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-course', repeatDaily: true },
+  { id: 7, title: '1階トイレを確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-toilet-1f', repeatDaily: true },
+  { id: 8, title: '2階のおしぼりウォーマーの電源を入れる', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-towels-2f', repeatDaily: true },
+  { id: 9, title: '2階のエアコンをつける', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-ac-2f', repeatDaily: true },
+  { id: 10, title: '2階トイレを確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', workDate: initialWorkDate, templateId: 'opening-toilet-2f', repeatDaily: true },
 ];
 
 const filters = [
@@ -119,6 +117,12 @@ const filters = [
   { id: 'open', label: '未完了' },
   { id: 'unassigned', label: '担当未定' },
   { id: 'done', label: '完了' },
+] as const;
+
+const categoryFilters = [
+  { id: '開店前', label: '開店前' },
+  { id: '締め', label: '締め' },
+  { id: 'all', label: 'すべて' },
 ] as const;
 
 const statusLabel: Record<Status, string> = { todo: '未着手', doing: '作業中', done: '完了' };
@@ -132,7 +136,7 @@ const avatarTones = [
 ];
 
 function emptyDraft(): TaskDraft {
-  return { title: '', category: '仕込み', assignee: '', dueTime: '11:30', priority: 'normal', repeatDaily: false };
+  return { title: '', category: '開店前', assignee: '', dueTime: '', priority: 'normal', repeatDaily: true };
 }
 
 function staffTone(index: number) {
@@ -174,16 +178,16 @@ function TaskFields({ prefix, draft, setDraft, staff }: { prefix: string; draft:
         作業内容
         <Input id={`${prefix}-title`} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="例：キャベツを千切りにする" className="h-11" />
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label htmlFor={`${prefix}-category`} className="grid gap-2 text-sm font-semibold">
-          カテゴリ
-          <Input id={`${prefix}-category`} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="h-11" />
-        </label>
-        <label htmlFor={`${prefix}-time`} className="grid gap-2 text-sm font-semibold">
-          完了予定
-          <Input id={`${prefix}-time`} type="time" value={draft.dueTime} onChange={(event) => setDraft({ ...draft, dueTime: event.target.value })} className="h-11" />
-        </label>
-      </div>
+      <label htmlFor={`${prefix}-category`} className="grid gap-2 text-sm font-semibold">
+        カテゴリ
+        <Select value={draft.category} onValueChange={(value) => setDraft({ ...draft, category: value ?? '開店前' })}>
+          <SelectTrigger id={`${prefix}-category`} className="h-11 w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="開店前">開店前</SelectItem>
+            <SelectItem value="締め">締め</SelectItem>
+          </SelectContent>
+        </Select>
+      </label>
       <label htmlFor={`${prefix}-assignee`} className="grid gap-2 text-sm font-semibold">
         担当者
         <Select value={draft.assignee || '__none__'} onValueChange={(value) => setDraft({ ...draft, assignee: value === '__none__' ? '' : (value ?? '') })}>
@@ -212,7 +216,8 @@ export default function Home() {
   const [workDate, setWorkDate] = useState(initialWorkDate);
   const [staff, setStaff] = useState(initialStaff);
   const [history, setHistory] = useState<CompletionRecord[]>([]);
-  const [filter, setFilter] = useState<(typeof filters)[number]['id']>('all');
+  const [filter, setFilter] = useState<(typeof filters)[number]['id']>('open');
+  const [categoryFilter, setCategoryFilter] = useState<(typeof categoryFilters)[number]['id']>('開店前');
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [staffOpen, setStaffOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -228,15 +233,24 @@ export default function Home() {
   const [newStaffName, setNewStaffName] = useState('');
 
   const today = formatWorkDate(workDate);
-  const completed = tasks.filter((task) => task.status === 'done').length;
-  const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
-  const unassignedCount = tasks.filter((task) => !task.assignee && task.status !== 'done').length;
+  const categoryTasks = useMemo(
+    () => categoryFilter === 'all' ? tasks : tasks.filter((task) => task.category === categoryFilter),
+    [categoryFilter, tasks],
+  );
+  const completed = categoryTasks.filter((task) => task.status === 'done').length;
+  const progress = categoryTasks.length ? Math.round((completed / categoryTasks.length) * 100) : 0;
+  const unassignedCount = categoryTasks.filter((task) => !task.assignee && task.status !== 'done').length;
   const visibleTasks = useMemo(() => {
-    if (filter === 'open') return tasks.filter((task) => task.status !== 'done');
-    if (filter === 'unassigned') return tasks.filter((task) => !task.assignee);
-    if (filter === 'done') return tasks.filter((task) => task.status === 'done');
-    return tasks;
-  }, [filter, tasks]);
+    const statusFiltered = filter === 'open'
+      ? categoryTasks.filter((task) => task.status !== 'done')
+      : filter === 'unassigned'
+        ? categoryTasks.filter((task) => !task.assignee)
+        : filter === 'done'
+          ? categoryTasks.filter((task) => task.status === 'done')
+          : categoryTasks;
+
+    return statusFiltered;
+  }, [categoryTasks, filter]);
 
   const loadHistory = useCallback(async () => {
     const response = await fetch('/api/history');
@@ -296,26 +310,26 @@ export default function Home() {
     const register = (tool: Record<string, unknown>) => { void Promise.resolve(context.registerTool(tool, { signal: lifecycle.signal })).catch(() => undefined); };
 
     register({
-      name: 'create_prep_task',
-      title: '仕込み作業を追加',
-      description: '今日の仕込み作業を1件追加し、画面の一覧にも反映します。',
+      name: 'create_task',
+      title: '作業を追加',
+      description: '今日の作業を1件追加し、画面の一覧にも反映します。',
       inputSchema: {
         type: 'object',
         properties: {
           title: { type: 'string', minLength: 1, maxLength: 100 },
           category: { type: 'string', minLength: 1, maxLength: 30 },
           assignee: { type: 'string' },
-          dueTime: { type: 'string', pattern: '^\\d{2}:\\d{2}$' },
+          dueTime: { type: 'string', description: '現在は空文字で登録します' },
           priority: { type: 'string', enum: ['normal', 'high'] },
           repeatDaily: { type: 'boolean', description: '毎日自動登録する場合はtrue' },
         },
-        required: ['title', 'category', 'assignee', 'dueTime', 'priority'],
+        required: ['title', 'category', 'assignee', 'priority'],
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: async (raw: unknown) => {
         const input = raw as Partial<TaskDraft>;
-        if (!input.title?.trim() || !input.category?.trim() || !/^\d{2}:\d{2}$/.test(input.dueTime ?? '') || !['normal', 'high'].includes(input.priority ?? '')) throw new Error('入力内容が正しくありません');
+        if (!input.title?.trim() || !input.category?.trim() || !['normal', 'high'].includes(input.priority ?? '')) throw new Error('入力内容が正しくありません');
         const response = await fetch('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...input, workDate }) });
         if (!response.ok) throw new Error('作業を追加できませんでした');
         const { task } = await response.json() as { task: Task };
@@ -325,8 +339,8 @@ export default function Home() {
     });
 
     register({
-      name: 'set_prep_task_status',
-      title: '仕込み作業の状態を変更',
+      name: 'set_task_status',
+      title: '作業の状態を変更',
       description: '作業を未着手・作業中・完了に変更します。完了時はcompletedByに完了者名が必要です。',
       inputSchema: {
         type: 'object',
@@ -507,7 +521,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-4 sm:px-8 lg:px-12">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-[#42db9c] text-[#081b16] shadow-[0_0_0_4px_rgba(66,219,156,.12)]"><ChefHat className="size-5" aria-hidden="true" /></span>
-            <div><p className="text-lg font-bold tracking-tight">仕込みボード</p><p className="text-xs text-slate-400">駅前店</p></div>
+            <p className="text-lg font-bold tracking-tight">作業確認ボード</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="mr-2 hidden items-center -space-x-2 lg:flex" aria-label={`本日のスタッフ${staff.length}名`}>
@@ -528,9 +542,22 @@ export default function Home() {
 
       <div className="mx-auto grid max-w-[1440px] gap-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_310px] lg:px-12 lg:py-9">
         <section className="min-w-0">
+          <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-slate-200 p-1.5" aria-label="作業カテゴリの切り替え">
+            {categoryFilters.map((item) => (
+              <Button
+                key={item.id}
+                size="lg"
+                variant={categoryFilter === item.id ? 'default' : 'ghost'}
+                onClick={() => setCategoryFilter(item.id)}
+                className={`h-14 rounded-xl text-base font-bold ${categoryFilter === item.id ? 'bg-[#1269e8] shadow-sm hover:bg-[#0f5dce]' : 'bg-transparent hover:bg-white/70'}`}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
           <div className="mb-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-            <div><p className="mb-1 flex items-center gap-2 text-sm font-bold text-[#1269e8]"><Sparkles className="size-4" aria-hidden="true" /> TODAY&apos;S PREP</p><h1 className="text-3xl font-black tracking-[-0.045em] sm:text-4xl">今日の仕込み</h1><p className="mt-2 text-base text-muted-foreground">{today} ・ 前日の未完了は自動で繰り越します</p></div>
-            <div className="flex flex-wrap gap-2" aria-label="作業の絞り込み">
+            <div><p className="mb-1 flex items-center gap-2 text-sm font-bold text-[#1269e8]"><Sparkles className="size-4" aria-hidden="true" /> TODAY&apos;S TASKS</p><h1 className="text-3xl font-black tracking-[-0.045em] sm:text-4xl">今日の{categoryFilter === 'all' ? '作業' : categoryFilter}</h1><p className="mt-2 text-base text-muted-foreground">{today} ・ 前日の未完了は自動で繰り越します</p></div>
+            <div className="flex flex-wrap items-center gap-2" aria-label="作業の絞り込み">
               {filters.map((item) => <Button key={item.id} size="lg" variant={filter === item.id ? 'default' : 'outline'} onClick={() => setFilter(item.id)} className={filter === item.id ? 'rounded-xl bg-[#1269e8]' : 'rounded-xl'}>{item.label}{item.id === 'unassigned' && unassignedCount > 0 ? <span className="ml-1 grid size-5 place-items-center rounded-full bg-[#ed6a45] text-[11px] text-white">{unassignedCount}</span> : null}</Button>)}
             </div>
           </div>
@@ -549,7 +576,6 @@ export default function Home() {
                   <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className={`truncate text-base font-bold sm:text-lg ${task.status === 'done' ? 'line-through' : ''}`}>{task.title}</h2>{task.priority === 'high' && task.status !== 'done' ? <span className="inline-flex items-center gap-1 rounded-full bg-[#fff0ea] px-2 py-1 text-xs font-bold text-[#c94724]"><Flame className="size-3" />急ぎ</span> : null}{task.repeatDaily ? <span className="inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-1 text-xs font-bold text-[#145daf]"><Repeat2 className="size-3" />毎日</span> : null}</div><div className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{task.category}</span><span className="font-medium text-[#1269e8]">{statusLabel[task.status]}</span></div></div>
                   <div className="col-start-2 flex items-center justify-between gap-2 sm:col-start-auto sm:justify-end">
                     {person ? <div className="flex items-center gap-2"><PersonAvatar member={person} index={personIndex} /><span className="text-sm font-bold">{person.name}</span></div> : <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[#ed6a45] bg-[#fff8f5] px-3 py-1.5 text-sm font-bold text-[#bd3f1f]"><Users className="size-4" />担当未定</span>}
-                    <span className="flex items-center gap-1 text-sm font-semibold tabular-nums text-muted-foreground"><Clock3 className="size-4" />{task.dueTime}</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`${task.title}のメニュー`} />}><MoreHorizontal /></DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-36">
@@ -567,13 +593,14 @@ export default function Home() {
         </section>
 
         <aside className="grid content-start gap-4">
-          <section className="overflow-hidden rounded-2xl bg-[#1269e8] p-5 text-white shadow-[0_16px_50px_rgba(18,105,232,.18)]"><div className="mb-7 flex items-start justify-between"><div><p className="text-sm font-semibold text-blue-100">本日の進み具合</p><p className="mt-1 text-4xl font-black tracking-tight">{progress}<span className="text-xl">%</span></p></div><span className="grid size-10 place-items-center rounded-xl bg-white/15"><LayoutList className="size-5" /></span></div><Progress value={progress} className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-track]]:bg-white/20 [&_[data-slot=progress-indicator]]:bg-[#7cf1bd]" /><div className="mt-3 flex justify-between text-sm font-semibold text-blue-100"><span>{completed}件 完了</span><span>残り{tasks.length - completed}件</span></div></section>
+          <section className="overflow-hidden rounded-2xl bg-[#1269e8] p-5 text-white shadow-[0_16px_50px_rgba(18,105,232,.18)]"><div className="mb-7 flex items-start justify-between"><div><p className="text-sm font-semibold text-blue-100">{categoryFilter === 'all' ? '本日' : categoryFilter}の進み具合</p><p className="mt-1 text-4xl font-black tracking-tight">{progress}<span className="text-xl">%</span></p></div><span className="grid size-10 place-items-center rounded-xl bg-white/15"><LayoutList className="size-5" /></span></div><Progress value={progress} className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-track]]:bg-white/20 [&_[data-slot=progress-indicator]]:bg-[#7cf1bd]" /><div className="mt-3 flex justify-between text-sm font-semibold text-blue-100"><span>{completed}件 完了</span><span>残り{categoryTasks.length - completed}件</span></div></section>
 
           <section className="rounded-2xl border bg-card p-5"><div className="mb-4 flex items-center justify-between"><h2 className="font-bold">いま確認したいこと</h2>{unassignedCount > 0 ? <AlertTriangle className="size-5 text-[#ed6a45]" /> : <Check className="size-5 text-[#1d9a65]" />}</div>{unassignedCount > 0 ? <div className="rounded-xl bg-[#fff6f0] p-4"><p className="text-sm font-bold text-[#9f351a]">担当未定が{unassignedCount}件あります</p><p className="mt-1 text-sm leading-relaxed text-[#74483a]">担当者が決まっていない作業を確認しましょう。</p><Button variant="ghost" className="mt-2 -ml-2 text-[#b64222] hover:bg-[#ffe8dd]" onClick={() => setFilter('unassigned')}>確認する <ArrowRight /></Button></div> : <p className="rounded-xl bg-[#e9faf2] p-4 text-sm font-semibold text-[#176e4b]">すべての作業に担当者が決まっています。</p>}</section>
 
           <section className="rounded-2xl border bg-card p-5">
             <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">本日のスタッフ</h2><Button variant="ghost" size="sm" className="text-[#1269e8]" onClick={() => setStaffOpen(true)}><UserPlus />追加</Button></div>
-            <div className="grid gap-3">{staff.map((person, index) => { const count = tasks.filter((task) => task.assignee === person.name && task.status !== 'done').length; return <div key={person.id} className="flex items-center gap-3"><PersonAvatar member={person} index={index} /><span className="min-w-0 flex-1 truncate text-sm font-bold">{person.name}</span><span className="text-sm text-muted-foreground">残り{count}件</span><Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={() => setStaffDeleteTarget(person)} aria-label={`${person.name}を削除`}><Trash2 /></Button></div>; })}</div>
+            <div className="grid gap-3">{staff.map((person, index) => { const count = categoryTasks.filter((task) => task.assignee === person.name && task.status !== 'done').length; return <div key={person.id} className="flex items-center gap-3"><PersonAvatar member={person} index={index} /><span className="min-w-0 flex-1 truncate text-sm font-bold">{person.name}</span><span className="text-sm text-muted-foreground">残り{count}件</span><Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={() => setStaffDeleteTarget(person)} aria-label={`${person.name}を削除`}><Trash2 /></Button></div>; })}</div>
+            {staff.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-sm text-muted-foreground">スタッフはまだ登録されていません。</p> : null}
           </section>
 
           <section className="rounded-2xl border bg-card p-5">

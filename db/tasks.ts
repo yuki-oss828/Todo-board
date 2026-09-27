@@ -19,13 +19,17 @@ export type TaskRecord = {
 export type TaskInput = Omit<TaskRecord, 'id' | 'status' | 'templateId'>;
 export type TaskUpdate = Omit<TaskRecord, 'status' | 'workDate' | 'templateId'>;
 
-const seedTasks: Omit<TaskRecord, 'id' | 'workDate' | 'templateId' | 'repeatDaily'>[] = [
-  { title: '玉ねぎをスライスする', category: '野菜', assignee: '田中', dueTime: '10:30', status: 'doing', priority: 'high' },
-  { title: '鶏もも肉を20食分カット', category: '肉・魚', assignee: '佐藤', dueTime: '11:00', status: 'todo', priority: 'normal' },
-  { title: 'ランチ用ソースを仕込む', category: 'ソース', assignee: '鈴木', dueTime: '11:15', status: 'todo', priority: 'normal' },
-  { title: 'サラダを12皿盛り付け', category: '盛り付け', assignee: '', dueTime: '11:30', status: 'todo', priority: 'high' },
-  { title: '米を4升炊く', category: '炊飯', assignee: '高橋', dueTime: '10:00', status: 'done', priority: 'normal' },
-  { title: '冷蔵庫の温度を記録', category: '確認', assignee: '田中', dueTime: '09:30', status: 'done', priority: 'normal' },
+const seedTasks: Omit<TaskRecord, 'id' | 'workDate' | 'repeatDaily'>[] = [
+  { title: 'カウンターを拭く', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-counter' },
+  { title: 'ビールの調整をする', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-beer' },
+  { title: '伝票を確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-slips' },
+  { title: '部屋をセットする', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-rooms' },
+  { title: '氷を用意する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-ice' },
+  { title: 'コース料理を確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-course' },
+  { title: '1階トイレを確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-toilet-1f' },
+  { title: '2階のおしぼりウォーマーの電源を入れる', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-towels-2f' },
+  { title: '2階のエアコンをつける', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-ac-2f' },
+  { title: '2階トイレを確認する', category: '開店前', assignee: '', dueTime: '', status: 'todo', priority: 'normal', templateId: 'opening-toilet-2f' },
 ];
 
 function db() {
@@ -97,10 +101,16 @@ export async function listTasks(workDate: string) {
         `).first();
         const statements = [];
         if (!previousUse) {
-          statements.push(...seedTasks.map((task) => database.prepare(`
-            INSERT INTO tasks (title, category, assignee, due_time, status, priority, work_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).bind(task.title, task.category, task.assignee, task.dueTime, task.status, task.priority, workDate)));
+          statements.push(...seedTasks.flatMap((task) => [
+            database.prepare(`
+              INSERT OR IGNORE INTO task_templates (id, title, category, assignee, due_time, priority, active)
+              VALUES (?, ?, ?, ?, ?, ?, 1)
+            `).bind(task.templateId, task.title, task.category, task.assignee, task.dueTime, task.priority),
+            database.prepare(`
+              INSERT OR IGNORE INTO tasks (title, category, assignee, due_time, status, priority, work_date, template_id)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(task.title, task.category, task.assignee, task.dueTime, task.status, task.priority, workDate, task.templateId),
+          ]));
         }
         statements.push(
           database.prepare(`
